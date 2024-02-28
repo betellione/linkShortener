@@ -3,13 +3,14 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log"
+	"net/http"
+	"os"
+
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"log"
-	"net/http"
-	"os"
 )
 
 type ShortURL struct {
@@ -22,20 +23,19 @@ type JsonRequest struct {
 	URL string `json:"url"`
 }
 
+const base62Digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
 func To62Base(num uint) string {
-	digits := "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 	if num == 0 {
 		return "0"
 	}
-
 	base := uint(62)
 	result := ""
 	for num > 0 {
 		remainder := num % base
 		num /= base
-		result = string(digits[remainder]) + result
+		result = string(base62Digits[remainder]) + result
 	}
-
 	return result
 }
 
@@ -45,14 +45,13 @@ func (base *ShortURL) AfterCreate(tx *gorm.DB) (err error) {
 }
 
 func findOrCreateURL(db *gorm.DB, inputURL string) (string, error) {
-	var urlRecord ShortURL
-	urlRecord.URL = inputURL
-	err := db.Where("url = ?", inputURL).FirstOrCreate(&urlRecord).Error
-	return urlRecord.ShortURL, err
+	urlRecord := ShortURL{URL: inputURL}
+	return urlRecord.ShortURL, db.Where("url = ?", inputURL).FirstOrCreate(&urlRecord).Error
 }
 
 func getDatabaseConnection() (*gorm.DB, error) {
-	dsn := fmt.Sprintf("host=localhost user=%s dbname=%s password=%s port=%s sslmode=disable",
+	dsn := fmt.Sprintf("host=%s user=%s dbname=%s password=%s port=%s sslmode=disable",
+		os.Getenv("DB_HOST"),
 		os.Getenv("POSTGRES_USER"),
 		os.Getenv("POSTGRES_DB"),
 		os.Getenv("POSTGRES_PASSWORD"),
@@ -64,12 +63,12 @@ func shortenURLHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var jsonReq JsonRequest
 		if err := c.BindJSON(&jsonReq); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 			return
 		}
 		shortened, err := findOrCreateURL(db, jsonReq.URL)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create or find URL"})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"shortURL": shortened})
@@ -81,17 +80,18 @@ func redirectHandler(db *gorm.DB) gin.HandlerFunc {
 		shortURL := c.Param("shortURL")
 		var urlRecord ShortURL
 		if err := db.Where("short_url = ?", shortURL).First(&urlRecord).Error; err != nil {
-			status := http.StatusInternalServerError
-			message := "Error retrieving the original URL"
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				status = http.StatusNotFound
-				message = "URL not found"
-			}
-			c.JSON(status, gin.H{"error": message})
+			c.JSON(getStatusError(err), gin.H{"error": "URL not found"})
 			return
 		}
 		c.Redirect(http.StatusFound, urlRecord.URL)
 	}
+}
+
+func getStatusError(err error) (status int) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return http.StatusNotFound
+	}
+	return http.StatusInternalServerError
 }
 
 func getGinRouter() (*gin.Engine, error) {
@@ -120,13 +120,13 @@ func main() {
 
 	router, err := getGinRouter()
 	if err != nil {
-		log.Fatalln("Failed to create router:", err)
+		log.Fatalln("Failed to initialize Gin router:", err)
 	}
 
 	router.POST("/shorten", shortenURLHandler(db))
 	router.GET("/:shortURL", redirectHandler(db))
 
-	if err := router.Run(":8080"); err != nil {
-		log.Fatalln("Failed to run server:", err)
+	if err := router.Run(); err != nil {
+		log.Fatalln("Failed to run the server:", err)
 	}
 }
