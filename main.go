@@ -59,7 +59,7 @@ func getDatabaseConnection() (*gorm.DB, error) {
 	return gorm.Open(postgres.Open(dsn), &gorm.Config{})
 }
 
-func shortenURLHandler(db *gorm.DB) gin.HandlerFunc {
+func postHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var jsonReq JsonRequest
 		if err := c.BindJSON(&jsonReq); err != nil {
@@ -75,7 +75,7 @@ func shortenURLHandler(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func redirectHandler(db *gorm.DB) gin.HandlerFunc {
+func getHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		shortURL := c.Param("shortURL")
 		var urlRecord ShortURL
@@ -123,8 +123,8 @@ func main() {
 		log.Fatalln("Failed to initialize Gin router:", err)
 	}
 
-	router.POST("/shorten", shortenURLHandler(db))
-	router.GET("/:shortURL", redirectHandler(db))
+	router.POST("/shorten", postHandler(db))
+	router.GET("/:shortURL", getHandler(db))
 
 	if err := router.Run(); err != nil {
 		log.Fatalln("Failed to run the server:", err)
