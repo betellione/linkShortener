@@ -13,18 +13,21 @@ import (
 	"gorm.io/gorm"
 )
 
+// ShortURL Определение структуры для записи коротких URL в базу данных.
 type ShortURL struct {
 	gorm.Model
 	ShortURL string `gorm:"unique_index"`
 	URL      string `gorm:"unique_index"`
 }
 
+// JsonRequest Структура для парсинга JSON запроса с полным URL.
 type JsonRequest struct {
 	URL string `json:"url"`
 }
 
 const base62Digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
+// To62Base Функция конвертации числового ID в короткий код на основе 62 символов.
 func To62Base(num uint) string {
 	if num == 0 {
 		return "0"
@@ -39,16 +42,19 @@ func To62Base(num uint) string {
 	return result
 }
 
+// AfterCreate Хук, автоматически срабатывающий после создания записи в базе данных для генерации короткого URL.
 func (base *ShortURL) AfterCreate(tx *gorm.DB) (err error) {
 	base.ShortURL = To62Base(base.ID)
 	return tx.Model(base).Update("ShortURL", base.ShortURL).Error
 }
 
+// Функция поиска существующего или создания нового короткого URL.
 func findOrCreateURL(db *gorm.DB, inputURL string) (string, error) {
 	urlRecord := ShortURL{URL: inputURL}
 	return urlRecord.ShortURL, db.Where("url = ?", inputURL).FirstOrCreate(&urlRecord).Error
 }
 
+// Функция для подключения к базе данных с параметрами из переменных окружения.
 func getDatabaseConnection() (*gorm.DB, error) {
 	dsn := fmt.Sprintf("host=%s user=%s dbname=%s password=%s port=%s sslmode=disable",
 		os.Getenv("DB_HOST"),
@@ -59,6 +65,7 @@ func getDatabaseConnection() (*gorm.DB, error) {
 	return gorm.Open(postgres.Open(dsn), &gorm.Config{})
 }
 
+// Определение обработчика HTTP POST запросов для создания коротких URL.
 func postHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var jsonReq JsonRequest
@@ -75,6 +82,7 @@ func postHandler(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// Определение обработчика HTTP GET запросов для перенаправления по короткому URL.
 func getHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		shortURL := c.Param("shortURL")
@@ -87,6 +95,7 @@ func getHandler(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// Вспомогательная функция для определения статуса ошибки при общении с базой данных.
 func getStatusError(err error) (status int) {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return http.StatusNotFound
@@ -94,6 +103,7 @@ func getStatusError(err error) (status int) {
 	return http.StatusInternalServerError
 }
 
+// Функция для получения маршрутизатора Gin с установленными прокси и режимом работы из переменных окружения.
 func getGinRouter() (*gin.Engine, error) {
 	gin.SetMode(os.Getenv("GIN_MODE"))
 	router := gin.Default()
@@ -104,6 +114,8 @@ func getGinRouter() (*gin.Engine, error) {
 	return router, nil
 }
 
+// Главная функция программы для загрузки .env файла, подключения к базе данных,
+// миграции схемы и настройки HTTP сервера.
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Fatalln("No .env file found")
@@ -123,7 +135,7 @@ func main() {
 		log.Fatalln("Failed to initialize Gin router:", err)
 	}
 
-	router.POST("/shorten", postHandler(db))
+	router.POST("/create", postHandler(db))
 	router.GET("/:shortURL", getHandler(db))
 
 	if err := router.Run(); err != nil {
