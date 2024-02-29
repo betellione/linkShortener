@@ -78,7 +78,7 @@ func postHandler(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create or find URL"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"shortURL": shortened})
+		c.JSON(http.StatusOK, gin.H{"shortId": shortened})
 	}
 }
 
