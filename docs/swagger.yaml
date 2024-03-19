@@ -1,0 +1,79 @@
+basePath: /
+definitions:
+  main.JsonRequest:
+    properties:
+      url:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API для сокращения URL.
+  title: Shortener API
+  version: "1.0"
+paths:
+  /{shortURL}:
+    get:
+      consumes:
+      - application/json
+      description: Получает короткий URL и перенаправляет на соответствующий полный
+        URL
+      parameters:
+      - description: Короткий URL
+        in: path
+        name: shortURL
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirected
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.JsonRequest'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/main.JsonRequest'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/main.JsonRequest'
+      summary: Перенаправляет на оригинальный URL
+      tags:
+      - URL
+  /create:
+    post:
+      consumes:
+      - application/json
+      description: Создает сокращенный URL из длинного
+      parameters:
+      - description: URL Request
+        in: body
+        name: url
+        required: true
+        schema:
+          $ref: '#/definitions/main.JsonRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.JsonRequest'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.JsonRequest'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/main.JsonRequest'
+      summary: Создает сокращенный URL
+      tags:
+      - URL
+swagger: "2.0"

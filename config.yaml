@@ -1,0 +1,6 @@
+gin_mode: release
+db_host: localhost
+postgres_user: user
+postgres_db: dbname
+postgres_password: password
+db_port: 5432
